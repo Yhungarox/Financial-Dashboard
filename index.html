@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WealthTrack - Financial Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.2.47/dist/vue.global.min.js"></script>
+    <style>
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity 0.3s;
+        }
+        .fade-enter-from, .fade-leave-to {
+            opacity: 0;
+        }
+        .ticker-tape {
+            animation: ticker 30s linear infinite;
+        }
+        @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans">
+    <div id="app" class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-indigo-900 text-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16 items-center">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 flex items-center">
+                            <i class="fas fa-chart-line text-2xl mr-2"></i>
+                            <span class="text-xl font-bold">WealthTrack</span>
+                        </div>
+                        <div class="hidden md:block ml-10">
+                            <div class="flex space-x-4">
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium bg-indigo-800">Dashboard</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Portfolio</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Markets</a>
+                                <a href="#" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">Reports</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-4 flex items-center md:ml-6">
+                            <button class="p-1 rounded-full text-indigo-200 hover:text-white focus:outline-none">
+                                <i class="fas fa-bell"></i>
+                                <span class="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
+                            </button>
+                            <div class="ml-3 relative">
+                                <div class="flex items-center cursor-pointer" @click="toggleUserDropdown">
+                                    <img class="h-8 w-8 rounded-full" src="files/profile.JPG" alt="">
+                                    <span class="ml-2 text-sm font-medium">Miracle Arokoyo</span>
+                                    <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                                </div>
+                                <transition name="fade">
+                                    <div v-if="showUserDropdown" class="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-50">
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Account Settings</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Billing</a>
+                                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Sign out</a>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Market Ticker -->
+        <div class="bg-gray-800 text-white py-2 overflow-hidden">
+            <div class="flex items-center ticker-tape whitespace-nowrap">
+                <div v-for="(ticker, index) in marketTickers" :key="index" class="inline-flex items-center mx-4">
+                    <span class="font-medium mr-2">{{ticker.symbol}}</span>
+                    <span class="mr-1">${{ticker.price.toFixed(2)}}</span>
+                    <span :class="{'text-green-400': ticker.change >= 0, 'text-red-400': ticker.change < 0}">
+                        ({{ticker.change >= 0 ? '+' : ''}}{{ticker.change.toFixed(2)}}%)
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Header -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">Financial Dashboard</h1>
+                    <p class="mt-1 text-gray-600">Real-time market data and portfolio analytics</p>
+                </div>
+                <div class="mt-4 md:mt-0 flex space-x-2">
+                    <select v-model="selectedTimeframe" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="1d">Today</option>
+                        <option value="1w">1 Week</option>
+                        <option value="1m">1 Month</option>
+                        <option value="3m">3 Months</option>
+                        <option value="1y">1 Year</option>
+                        <option value="all">All Time</option>
+                    </select>
+                    <button @click="refreshData" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <i class="fas fa-sync-alt mr-2"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Total Portfolio Value</p>
+                            <p class="text-2xl font-semibold text-gray-900">${{formatCurrency(portfolioValue)}}</p>
+                        </div>
+                        <div class="p-3 rounded-full bg-indigo-100 text-indigo-600">
+                            <i class="fas fa-wallet text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <span :class="{'text-green-600': portfolioChange >= 0, 'text-red-600': portfolioChange < 0}" class="inline-flex items-center">
+                            {{portfolioChange >= 0 ? '+' : ''}}{{portfolioChange.toFixed(2)}}%
+                            <i :class="{'fa-arrow-up': portfolioChange >= 0, 'fa-arrow-down': portfolioChange < 0}" class="fas ml-1"></i>
+                        </span>
+                        <span class="text-sm text-gray-500 ml-2">vs. previous period</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Today's Gain/Loss</p>
+                            <p :class="{'text-green-600': todaysChange >= 0, 'text-red-600': todaysChange < 0}" class="text-2xl font-semibold">
+                                {{todaysChange >= 0 ? '+' : ''}}${{formatCurrency(Math.abs(todaysChange))}}
+                            </p>
+                        </div>
+                        <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                            <i class="fas fa-chart-bar text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <span class="text-sm text-gray-500">{{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}}</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Best Performer</p>
+                            <p class="text-xl font-semibold text-gray-900">{{bestPerformer.symbol}}</p>
+                            <p :class="{'text-green-600': bestPerformer.change >= 0, 'text-red-600': bestPerformer.change < 0}" class="text-lg">
+                                {{bestPerformer.change >= 0 ? '+' : ''}}{{bestPerformer.change.toFixed(2)}}%
+                            </p>
+                        </div>
+                        <div class="p-3 rounded-full bg-green-100 text-green-600">
+                            <i class="fas fa-trophy text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <span class="text-sm text-gray-500">Current: ${{bestPerformer.price.toFixed(2)}}</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500">Worst Performer</p>
+                            <p class="text-xl font-semibold text-gray-900">{{worstPerformer.symbol}}</p>
+                            <p :class="{'text-green-600': worstPerformer.change >= 0, 'text-red-600': worstPerformer.change < 0}" class="text-lg">
+                                {{worstPerformer.change >= 0 ? '+' : ''}}{{worstPerformer.change.toFixed(2)}}%
+                            </p>
+                        </div>
+                        <div class="p-3 rounded-full bg-red-100 text-red-600">
+                            <i class="fas fa-exclamation-triangle text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <span class="text-sm text-gray-500">Current: ${{worstPerformer.price.toFixed(2)}}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Portfolio Value Chart -->
+                <div class="bg-white rounded-lg shadow card-hover p-6 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-medium text-gray-900">Portfolio Value</h2>
+                        <div class="flex space-x-2">
+                            <button @click="setChartType('line')" :class="{'bg-indigo-100 text-indigo-700': chartType === 'line', 'text-gray-500': chartType !== 'line'}" class="px-3 py-1 rounded-md text-sm font-medium">
+                                Line
+                            </button>
+                            <button @click="setChartType('area')" :class="{'bg-indigo-100 text-indigo-700': chartType === 'area', 'text-gray-500': chartType !== 'area'}" class="px-3 py-1 rounded-md text-sm font-medium">
+                                Area
+                            </button>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="portfolioChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Asset Allocation Chart -->
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Asset Allocation</h2>
+                    <div class="h-80">
+                        <div id="allocationChart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Data and Holdings -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                <!-- Market Indices -->
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Market Indices</h2>
+                    <div class="space-y-4">
+                        <div v-for="index in marketIndices" :key="index.symbol" class="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="p-2 rounded-full bg-gray-100 mr-3">
+                                    <i class="fas fa-chart-line text-gray-600"></i>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">{{index.name}}</p>
+                                    <p class="text-sm text-gray-500">{{index.symbol}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-medium">${{index.price.toFixed(2)}}</p>
+                                <p :class="{'text-green-600': index.change >= 0, 'text-red-600': index.change < 0}" class="text-sm">
+                                    {{index.change >= 0 ? '+' : ''}}{{index.change.toFixed(2)}}%
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Holdings -->
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-medium text-gray-900">Top Holdings</h2>
+                        <button @click="showAddHoldingModal = true" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            <i class="fas fa-plus mr-1"></i> Add Holding
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Shares</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="holding in topHoldings" :key="holding.symbol" class="hover:bg-gray-50 cursor-pointer" @click="viewHoldingDetails(holding)">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <div class="flex-shrink-0 h-10 w-10">
+                                                <img class="h-10 w-10 rounded-full" :src="holding.logo" :alt="holding.symbol">
+                                            </div>
+                                            <div class="ml-4">
+                                                <div class="text-sm font-medium text-gray-900">{{holding.symbol}}</div>
+                                                <div class="text-sm text-gray-500">{{holding.name}}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{holding.shares}}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                        ${{formatCurrency(holding.value)}}
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="{'bg-green-100 text-green-800': holding.change >= 0, 'bg-red-100 text-red-800': holding.change < 0}" class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full">
+                                            {{holding.change >= 0 ? '+' : ''}}{{holding.change.toFixed(2)}}%
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Recent Transactions -->
+                <div class="bg-white rounded-lg shadow card-hover p-6">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Recent Transactions</h2>
+                    <div class="space-y-4">
+                        <div v-for="txn in recentTransactions" :key="txn.id" class="border-l-4 pl-4 py-2" :class="{'border-green-500 bg-green-50': txn.type === 'buy', 'border-red-500 bg-red-50': txn.type === 'sell'}">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium">{{txn.symbol}}</p>
+                                    <p class="text-sm text-gray-500">{{formatDate(txn.date)}}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="font-medium">{{txn.type === 'buy' ? 'Bought' : 'Sold'}} {{txn.shares}} shares</p>
+                                    <p class="text-sm">{{txn.type === 'buy' ? 'at' : 'for'}} ${{txn.price.toFixed(2)}}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        View All Transactions
+                    </button>
+                </div>
+            </div>
+
+            <!-- News Section -->
+            <div class="bg-white rounded-lg shadow card-hover p-6 mb-6">
+                <h2 class="text-lg font-medium text-gray-900 mb-4">Financial News</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div v-for="article in financialNews" :key="article.id" class="border rounded-lg overflow-hidden hover:shadow-md transition-shadow duration-300">
+                        <img :src="article.image" :alt="article.title" class="w-full h-40 object-cover">
+                        <div class="p-4">
+                            <div class="flex items-center text-sm text-gray-500 mb-2">
+                                <span>{{article.source}}</span>
+                                <span class="mx-2">•</span>
+                                <span>{{formatDate(article.date)}}</span>
+                            </div>
+                            <h3 class="font-medium text-gray-900 mb-2">{{article.title}}</h3>
+                            <p class="text-sm text-gray-600 mb-3">{{article.summary.substring(0, 100)}}...</p>
+                            <a :href="article.url" target="_blank" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Read more →</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Add Holding Modal -->
+        <transition name="fade">
+            <div v-if="showAddHoldingModal" class="fixed inset-0 overflow-y-auto z-50">
+                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                    </div>
+                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                    <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                    <div class="flex justify-between items-center">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                            Add New Holding
+                                        </h3>
+                                        <button @click="showAddHoldingModal = false" class="text-gray-400 hover:text-gray-500">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="mb-4">
+                                            <label for="holding-symbol" class="block text-sm font-medium text-gray-700">Symbol</label>
+                                            <input type="text" v-model="newHolding.symbol" id="holding-symbol" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        </div>
+                                        <div class="mb-4">
+                                            <label for="holding-shares" class="block text-sm font-medium text-gray-700">Shares</label>
+                                            <input type="number" v-model="newHolding.shares" id="holding-shares" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        </div>
+                                        <div class="mb-4">
+                                            <label for="holding-price" class="block text-sm font-medium text-gray-700">Purchase Price</label>
+                                            <input type="number" step="0.01" v-model="newHolding.price" id="holding-price" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        </div>
+                                        <div class="mb-4">
+                                            <label for="holding-date" class="block text-sm font-medium text-gray-700">Purchase Date</label>
+                                            <input type="date" v-model="newHolding.date" id="holding-date" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <button @click="addHolding" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm">
+                                Add Holding
+                            </button>
+                            <button @click="showAddHoldingModal = false" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- Holding Details Modal -->
+        <transition name="fade">
+            <div v-if="selectedHolding" class="fixed inset-0 overflow-y-auto z-50">
+                <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                    </div>
+                    <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                    <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+                        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                    <div class="flex justify-between items-center">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                                            {{selectedHolding.name}} ({{selectedHolding.symbol}})
+                                        </h3>
+                                        <button @click="selectedHolding = null" class="text-gray-400 hover:text-gray-500">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mt-4">
+                                        <div class="flex items-center justify-between mb-6">
+                                            <div>
+                                                <p class="text-2xl font-bold">${{selectedHolding.price.toFixed(2)}}</p>
+                                                <p :class="{'text-green-600': selectedHolding.change >= 0, 'text-red-600': selectedHolding.change < 0}" class="text-sm">
+                                                    {{selectedHolding.change >= 0 ? '+' : ''}}{{selectedHolding.change.toFixed(2)}}% today
+                                                </p>
+                                            </div>
+                                            <img :src="selectedHolding.logo" :alt="selectedHolding.symbol" class="h-16 w-16 rounded-full border-2 border-gray-200">
+                                        </div>
+
+                                        <div class="grid grid-cols-2 gap-4 mb-6">
+                                            <div class="bg-gray-50 p-3 rounded-lg">
+                                                <p class="text-sm font-medium text-gray-500">Shares</p>
+                                                <p class="text-lg font-semibold">{{selectedHolding.shares}}</p>
+                                            </div>
+                                            <div class="bg-gray-50 p-3 rounded-lg">
+                                                <p class="text-sm font-medium text-gray-500">Value</p>
+                                                <p class="text-lg font-semibold">${{formatCurrency(selectedHolding.value)}}</p>
+                                            </div>
+                                            <div class="bg-gray-50 p-3 rounded-lg">
+                                                <p class="text-sm font-medium text-gray-500">Avg Cost</p>
+                                                <p class="text-lg font-semibold">${{selectedHolding.avgCost.toFixed(2)}}</p>
+                                            </div>
+                                            <div class="bg-gray-50 p-3 rounded-lg">
+                                                <p class="text-sm font-medium text-gray-500">Total Gain</p>
+                                                <p :class="{'text-green-600': selectedHolding.totalGain >= 0, 'text-red-600': selectedHolding.totalGain < 0}" class="text-lg font-semibold">
+                                                    ${{formatCurrency(Math.abs(selectedHolding.totalGain))}}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-6">
+                                            <h4 class="font-medium text-gray-900 mb-2">Performance</h4>
+                                            <div class="h-48">
+                                                <canvas id="holdingChart"></canvas>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <h4 class="font-medium text-gray-900 mb-2">About</h4>
+                                            <p class="text-sm text-gray-600">{{selectedHolding.description}}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <button @click="showTransactionModal(selectedHolding)" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm">
+                                <i class="fas fa-exchange-alt mr-2"></i> Buy/Sell
+                            </button>
+                            <button @click="selectedHolding = null" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                // State
+                const showUserDropdown = ref(false);
+                const showAddHoldingModal = ref(false);
+                const selectedHolding = ref(null);
+                const selectedTimeframe = ref('1m');
+                const chartType = ref('line');
+                const portfolioChart = ref(null);
+                const holdingChart = ref(null);
+                const allocationChart = ref(null);
+
+                // Sample data
+                const marketTickers = ref([
+                    { symbol: 'AAPL', price: 185.25, change: 1.23 },
+                    { symbol: 'MSFT', price: 403.78, change: -0.45 },
+                    { symbol: 'GOOGL', price: 172.34, change: 2.67 },
+                    { symbol: 'AMZN', price: 178.75, change: 0.89 },
+                    { symbol: 'TSLA', price: 248.48, change: -3.21 },
+                    { symbol: 'NVDA', price: 950.02, change: 5.78 },
+                    { symbol: 'META', price: 485.58, change: 1.34 },
+                    { symbol: 'JPM', price: 198.34, change: -0.23 }
+                ]);
+
+                const marketIndices = ref([
+                    { symbol: '^GSPC', name: 'S&P 500', price: 5218.88, change: 0.68 },
+                    { symbol: '^DJI', name: 'Dow Jones', price: 39170.24, change: -0.12 },
+                    { symbol: '^IXIC', name: 'NASDAQ', price: 16340.87, change: 1.24 },
+                    { symbol: '^RUT', name: 'Russell 2000', price: 2058.99, change: 0.45 },
+                    { symbol: '^FTSE', name: 'FTSE 100', price: 8317.59, change: -0.78 }
+                ]);
+
+                const topHoldings = ref([
+                    { 
+                        symbol: 'AAPL', 
+                        name: 'Apple Inc.', 
+                        shares: 45, 
+                        price: 185.25, 
+                        change: 1.23, 
+                        value: 8336.25, 
+                        avgCost: 172.50, 
+                        totalGain: 573.75,
+                        logo: 'https://cdn-icons-png.flaticon.com/512/0/747.png',
+                        description: 'Apple Inc. designs, manufactures, and markets smartphones, personal computers, tablets, wearables, and accessories worldwide.'
+                    },
+                    { 
+                        symbol: 'MSFT', 
+                        name: 'Microsoft Corporation', 
+                        shares: 20, 
+                        price: 403.78, 
+                        change: -0.45, 
+                        value: 8075.60, 
+                        avgCost: 390.25, 
+                        totalGain: 270.60,
+                        logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR8u8BZcgcIxcfgSJsas_HDf2pfYTBlmo2q3g&s',
+                        description: 'Microsoft develops and supports software, services, devices, and solutions worldwide.'
+                    },
+                    { 
+                        symbol: 'GOOGL', 
+                        name: 'Alphabet Inc.', 
+                        shares: 15, 
+                        price: 172.34, 
+                        change: 2.67, 
+                        value: 2585.10, 
+                        avgCost: 165.80, 
+                        totalGain: 98.10,
+                        logo: 'https://png.pngtree.com/png-vector/20230817/ourmid/pngtree-google-internet-icon-vector-png-image_9183287.png',
+                        description: 'Alphabet Inc. provides online advertising services in the United States, Europe, the Middle East, Africa, the Asia-Pacific, Canada, and Latin America.'
+                    },
+                    { 
+                        symbol: 'AMZN', 
+                        name: 'Amazon.com Inc.', 
+                        shares: 8, 
+                        price: 178.75, 
+                        change: 0.89, 
+                        value: 1430.00, 
+                        avgCost: 175.20, 
+                        totalGain: 28.40,
+                        logo: 'https://pngimg.com/d/amazon_PNG17.png',
+                        description: 'Amazon.com operates as an online retailer in North America and internationally. It operates through three segments: North America, International, and Amazon Web Services.'
+                    },
+                    { 
+                        symbol: 'TSLA', 
+                        name: 'Tesla Inc.', 
+                        shares: 12, 
+                        price: 248.48, 
+                        change: -3.21, 
+                        value: 2981.76, 
+                        avgCost: 210.75, 
+                        totalGain: 452.76,
+                        logo: 'https://cdn.iconscout.com/icon/free/png-256/free-tesla-logo-icon-download-in-svg-png-gif-file-formats--technology-social-media-company-vol-7-pack-logos-icons-3030326.png?f=webp&w=256',
+                        description: 'Tesla designs, develops, manufactures, leases, and sells electric vehicles, and energy generation and storage systems in the United States, China, and internationally.'
+                    }
+                ]);
+
+                const recentTransactions = ref([
+                    { id: 1, symbol: 'AAPL', type: 'buy', shares: 5, price: 182.50, date: '2025-05-15' },
+                    { id: 2, symbol: 'MSFT', type: 'sell', shares: 3, price: 405.20, date: '2025-05-14' },
+                    { id: 3, symbol: 'NVDA', type: 'buy', shares: 2, price: 945.75, date: '2025-05-12' },
+                    { id: 4, symbol: 'GOOGL', type: 'buy', shares: 5, price: 168.90, date: '2025-05-10' },
+                    { id: 5, symbol: 'AMZN', type: 'sell', shares: 2, price: 177.80, date: '2025-05-08' }
+                ]);
+
+                const financialNews = ref([
+                    { 
+                        id: 1, 
+                        title: 'Fed Signals Potential Rate Cuts Later This Year', 
+                        summary: 'The Federal Reserve indicated it may cut interest rates later this year if inflation continues to moderate, sending markets higher.', 
+                        source: 'Wall Street Journal', 
+                        date: '2025-05-16', 
+                        image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&h=300&q=80',
+                        url: '#' 
+                    },
+                    { 
+                        id: 2, 
+                        title: 'Tech Stocks Rally as AI Optimism Grows', 
+                        summary: 'Major technology companies saw their shares rise as investors grow increasingly optimistic about the potential of artificial intelligence.', 
+                        source: 'Bloomberg', 
+                        date: '2025-05-15', 
+                        image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&h=300&q=80',
+                        url: '#' 
+                    },
+                    { 
+                        id: 3, 
+                        title: 'Retail Sales Show Surprise Growth in April', 
+                        summary: 'U.S. retail sales unexpectedly rose in April, suggesting consumer spending remains resilient despite economic headwinds.', 
+                        source: 'CNBC', 
+                        date: '2025-05-14', 
+                        image: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&h=300&q=80',
+                        url: '#' 
+                    }
+                ]);
+
+                const newHolding = ref({
+                    symbol: '',
+                    shares: 0,
+                    price: 0,
+                    date: new Date().toISOString().split('T')[0]
+                });
+
+                // Computed properties
+                const portfolioValue = computed(() => {
+                    return topHoldings.value.reduce((sum, holding) => sum + holding.value, 0);
+                });
+
+                const portfolioChange = computed(() => {
+                    // Simulated change based on timeframe
+                    switch(selectedTimeframe.value) {
+                        case '1d': return 0.68;
+                        case '1w': return 2.45;
+                        case '1m': return 5.32;
+                        case '3m': return 12.78;
+                        case '1y': return 24.56;
+                        default: return 68.34;
+                    }
+                });
+
+                const todaysChange = computed(() => {
+                    return topHoldings.value.reduce((sum, holding) => {
+                        const valueChange = (holding.change / 100) * holding.value;
+                        return sum + valueChange;
+                    }, 0);
+                });
+
+                const bestPerformer = computed(() => {
+                    return [...topHoldings.value].sort((a, b) => b.change - a.change)[0];
+                });
+
+                const worstPerformer = computed(() => {
+                    return [...topHoldings.value].sort((a, b) => a.change - b.change)[0];
+                });
+
+                // Methods
+                const toggleUserDropdown = () => {
+                    showUserDropdown.value = !showUserDropdown.value;
+                };
+
+                const formatCurrency = (value) => {
+                    return new Intl.NumberFormat('en-US', { 
+                        style: 'decimal', 
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2 
+                    }).format(value);
+                };
+
+                const formatDate = (dateString) => {
+                    if (!dateString) return '';
+                    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+                    return new Date(dateString).toLocaleDateString(undefined, options);
+                };
+
+                const refreshData = () => {
+                    // Simulate data refresh
+                    marketTickers.value.forEach(ticker => {
+                        const change = (Math.random() * 4) - 2; // Random change between -2% and +2%
+                        ticker.price = ticker.price * (1 + (change / 100));
+                        ticker.change = change;
+                    });
+
+                    topHoldings.value.forEach(holding => {
+                        const change = (Math.random() * 4) - 2; // Random change between -2% and +2%
+                        holding.price = holding.price * (1 + (change / 100));
+                        holding.change = change;
+                        holding.value = holding.shares * holding.price;
+                        holding.totalGain = (holding.price - holding.avgCost) * holding.shares;
+                    });
+
+                    initPortfolioChart();
+                    initAllocationChart();
+                };
+
+                const setChartType = (type) => {
+                    chartType.value = type;
+                    initPortfolioChart();
+                };
+
+                const viewHoldingDetails = (holding) => {
+                    selectedHolding.value = holding;
+                    // Initialize chart after the modal is shown
+                    setTimeout(initHoldingChart, 100);
+                };
+
+                const showTransactionModal = (holding) => {
+                    // In a real app, this would open a transaction modal
+                    alert(`Transaction modal for ${holding.symbol} would open here`);
+                };
+
+                const addHolding = () => {
+                    if (!newHolding.value.symbol || !newHolding.value.shares || !newHolding.value.price) return;
+
+                    const symbol = newHolding.value.symbol.toUpperCase();
+                    const price = parseFloat(newHolding.value.price);
+                    const shares = parseInt(newHolding.value.shares);
+                    const value = price * shares;
+
+                    // Check if holding already exists
+                    const existingIndex = topHoldings.value.findIndex(h => h.symbol === symbol);
+                    
+                    if (existingIndex >= 0) {
+                        // Update existing holding
+                        const existing = topHoldings.value[existingIndex];
+                        const totalShares = existing.shares + shares;
+                        const avgCost = ((existing.avgCost * existing.shares) + (price * shares)) / totalShares;
+                        
+                        topHoldings.value[existingIndex] = {
+                            ...existing,
+                            shares: totalShares,
+                            avgCost: avgCost,
+                            value: existing.value + value,
+                            totalGain: (existing.price - avgCost) * totalShares
+                        };
+                    } else {
+                        // Add new holding
+                        const newId = topHoldings.value.length > 0 ? 
+                            Math.max(...topHoldings.value.map(h => h.id), 0) + 1 : 1;
+                        
+                        topHoldings.value.push({
+                            id: newId,
+                            symbol: symbol,
+                            name: `${symbol} Company`,
+                            shares: shares,
+                            price: price,
+                            change: 0,
+                            value: value,
+                            avgCost: price,
+                            totalGain: 0,
+                            logo: `https://logo.clearbit.com/${symbol.toLowerCase()}.com`,
+                            description: `Information about ${symbol} company.`
+                        });
+                    }
+
+                    // Add to transactions
+                    const txnId = recentTransactions.value.length > 0 ? 
+                        Math.max(...recentTransactions.value.map(t => t.id), 0) + 1 : 1;
+                    
+                    recentTransactions.value.unshift({
+                        id: txnId,
+                        symbol: symbol,
+                        type: 'buy',
+                        shares: shares,
+                        price: price,
+                        date: newHolding.value.date || new Date().toISOString().split('T')[0]
+                    });
+
+                    showAddHoldingModal.value = false;
+                    newHolding.value = {
+                        symbol: '',
+                        shares: 0,
+                        price: 0,
+                        date: new Date().toISOString().split('T')[0]
+                    };
+                };
+
+                // Chart initialization
+                const initPortfolioChart = () => {
+                    const ctx = document.getElementById('portfolioChart').getContext('2d');
+                    
+                    // Destroy previous chart if exists
+                    if (portfolioChart.value) {
+                        portfolioChart.value.destroy();
+                    }
+
+                    // Generate sample data based on timeframe
+                    let labels = [];
+                    let data = [];
+                    const now = new Date();
+                    
+                    switch(selectedTimeframe.value) {
+                        case '1d':
+                            // Hourly data for today
+                            for (let i = 0; i < 24; i++) {
+                                const hour = i < 13 ? `${i} AM` : `${i-12} PM`;
+                                labels.push(hour);
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.02 - 0.01)));
+                            }
+                            break;
+                        case '1w':
+                            // Daily data for week
+                            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                            for (let i = 6; i >= 0; i--) {
+                                const date = new Date(now);
+                                date.setDate(date.getDate() - i);
+                                labels.push(days[date.getDay()]);
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.05 - 0.025)));
+                            }
+                            break;
+                        case '1m':
+                            // Weekly data for month
+                            for (let i = 4; i >= 0; i--) {
+                                const date = new Date(now);
+                                date.setDate(date.getDate() - (i * 7));
+                                labels.push(`Week ${5 - i}`);
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.1 - 0.05)));
+                            }
+                            break;
+                        case '3m':
+                            // Monthly data for 3 months
+                            for (let i = 3; i >= 0; i--) {
+                                const date = new Date(now);
+                                date.setMonth(date.getMonth() - i);
+                                labels.push(date.toLocaleDateString('default', { month: 'short' }));
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.15 - 0.075)));
+                            }
+                            break;
+                        case '1y':
+                            // Quarterly data for year
+                            const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+                            for (let i = 4; i >= 0; i--) {
+                                labels.push(quarters[4 - i] + ' ' + (now.getFullYear() - (i > 1 ? 1 : 0)));
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.2 - 0.1)));
+                            }
+                            break;
+                        default:
+                            // Yearly data for all time
+                            for (let i = 5; i >= 0; i--) {
+                                labels.push((now.getFullYear() - i).toString());
+                                data.push(portfolioValue.value * (1 + (Math.random() * 0.3 - 0.15)));
+                            }
+                    }
+
+                    // Normalize data to start from a lower value
+                    const minValue = Math.min(...data) * 0.9;
+                    data = data.map(val => val - minValue + portfolioValue.value * 0.1);
+
+                    // Create chart
+                    portfolioChart.value = new Chart(ctx, {
+                        type: chartType.value,
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Portfolio Value',
+                                data: data,
+                                backgroundColor: chartType.value === 'area' ? 'rgba(79, 70, 229, 0.2)' : 'rgba(79, 70, 229, 0.5)',
+                                borderColor: 'rgba(79, 70, 229, 1)',
+                                borderWidth: 2,
+                                pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                                pointRadius: 3,
+                                fill: chartType.value === 'area'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `$${formatCurrency(context.raw)}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return `$${formatCurrency(value)}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                };
+
+                const initHoldingChart = () => {
+                    if (!selectedHolding.value) return;
+                    
+                    const ctx = document.getElementById('holdingChart').getContext('2d');
+                    
+                    // Destroy previous chart if exists
+                    if (holdingChart.value) {
+                        holdingChart.value.destroy();
+                    }
+
+                    // Generate sample data for the selected holding
+                    const labels = [];
+                    const data = [];
+                    const now = new Date();
+                    
+                    for (let i = 30; i >= 0; i--) {
+                        const date = new Date(now);
+                        date.setDate(date.getDate() - i);
+                        labels.push(date.toLocaleDateString('default', { month: 'short', day: 'numeric' }));
+                        
+                        // Simulate price movement with some randomness
+                        const prevPrice = data.length > 0 ? data[data.length - 1] : selectedHolding.value.price * 0.95;
+                        const change = (Math.random() * 0.06) - 0.03; // Random change between -3% and +3%
+                        data.push(prevPrice * (1 + change));
+                    }
+
+                    // Create chart
+                    holdingChart.value = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Price',
+                                data: data,
+                                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                borderColor: 'rgba(79, 70, 229, 1)',
+                                borderWidth: 2,
+                                pointBackgroundColor: 'rgba(79, 70, 229, 1)',
+                                pointRadius: 2,
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return `$${context.raw.toFixed(2)}`;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return `$${value.toFixed(2)}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                };
+
+                const initAllocationChart = () => {
+                    const element = document.getElementById('allocationChart');
+                    
+                    // Destroy previous chart if exists
+                    if (allocationChart.value) {
+                        allocationChart.value.destroy();
+                    }
+
+                    // Prepare data
+                    const categories = ['Stocks', 'Bonds', 'Real Estate', 'Cash', 'Crypto'];
+                    const data = [65, 15, 10, 7, 3];
+                    const colors = ['#6366F1', '#4F46E5', '#4338CA', '#3730A3', '#312E81'];
+
+                    // Create chart
+                    allocationChart.value = new ApexCharts(element, {
+                        series: data,
+                        chart: {
+                            type: 'donut',
+                            height: '100%'
+                        },
+                        labels: categories,
+                        colors: colors,
+                        legend: {
+                            position: 'bottom'
+                        },
+                        plotOptions: {
+                            pie: {
+                                donut: {
+                                    size: '65%',
+                                    labels: {
+                                        show: true,
+                                        total: {
+                                            show: true,
+                                            label: 'Total',
+                                            formatter: function () {
+                                                return '$' + formatCurrency(portfolioValue.value);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        dataLabels: {
+                            formatter: function(val, opts) {
+                                return opts.w.config.series[opts.seriesIndex] + '%';
+                            }
+                        },
+                        tooltip: {
+                            y: {
+                                formatter: function(val) {
+                                    return '$' + formatCurrency((val / 100) * portfolioValue.value);
+                                }
+                            }
+                        }
+                    });
+
+                    allocationChart.value.render();
+                };
+
+                // Watch for timeframe changes
+                watch(selectedTimeframe, () => {
+                    initPortfolioChart();
+                });
+
+                // Initialize charts when component mounts
+                onMounted(() => {
+                    initPortfolioChart();
+                    initAllocationChart();
+                });
+
+                return {
+                    showUserDropdown,
+                    showAddHoldingModal,
+                    selectedHolding,
+                    selectedTimeframe,
+                    chartType,
+                    marketTickers,
+                    marketIndices,
+                    topHoldings,
+                    recentTransactions,
+                    financialNews,
+                    newHolding,
+                    portfolioValue,
+                    portfolioChange,
+                    todaysChange,
+                    bestPerformer,
+                    worstPerformer,
+                    toggleUserDropdown,
+                    formatCurrency,
+                    formatDate,
+                    refreshData,
+                    setChartType,
+                    viewHoldingDetails,
+                    showTransactionModal,
+                    addHolding
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
